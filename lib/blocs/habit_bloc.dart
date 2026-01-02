@@ -2,6 +2,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import '../models/habit.dart';
 import '../utils/boxes.dart';
+import '../utils/streak_utils.dart';
 
 // Events
 abstract class HabitEvent {}
@@ -114,28 +115,10 @@ class HabitBloc extends Bloc<HabitEvent, HabitState> {
         event.habit.completedDates.add(normalizedDate);
       }
 
-      // Recalculate streak
-      int streak = 0;
-      DateTime checkDate = DateTime.now();
-      checkDate = DateTime(checkDate.year, checkDate.month, checkDate.day);
-
-      if (event.habit.isCompletedOn(checkDate)) {
-        while (event.habit.isCompletedOn(checkDate)) {
-          streak++;
-          checkDate = checkDate.subtract(const Duration(days: 1));
-        }
-      } else {
-        DateTime yesterday = checkDate.subtract(const Duration(days: 1));
-        if (event.habit.isCompletedOn(yesterday)) {
-          checkDate = yesterday;
-          while (event.habit.isCompletedOn(checkDate)) {
-            streak++;
-            checkDate = checkDate.subtract(const Duration(days: 1));
-          }
-        }
-      }
-
-      event.habit.streak = streak;
+      event.habit.streak = calculateStreak(
+        event.habit.completedDates,
+        DateTime.now(),
+      );
       await event.habit.save();
       add(LoadHabits());
     } catch (e) {
@@ -144,19 +127,9 @@ class HabitBloc extends Bloc<HabitEvent, HabitState> {
   }
 
   List<int> getLast7DaysStats(List<Habit> habits) {
-    List<int> counts = [];
-    DateTime today = DateTime.now();
-
-    for (int i = 6; i >= 0; i--) {
-      DateTime day = today.subtract(Duration(days: i));
-      int count = 0;
-      for (var habit in habits) {
-        if (habit.isCompletedOn(day)) {
-          count++;
-        }
-      }
-      counts.add(count);
-    }
-    return counts;
+    return last7DaysCompletionCounts(
+      habits.map((habit) => habit.completedDates),
+      DateTime.now(),
+    );
   }
 }

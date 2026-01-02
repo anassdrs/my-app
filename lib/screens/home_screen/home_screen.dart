@@ -28,7 +28,27 @@ class _HomeScreenState extends State<HomeScreen> {
     print("HomeScreen building index: $_currentIndex");
     return Scaffold(
       extendBody: true,
-      body: _views[_currentIndex],
+      body: AnimatedSwitcher(
+        duration: const Duration(milliseconds: 350),
+        switchInCurve: Curves.easeOutCubic,
+        switchOutCurve: Curves.easeInCubic,
+        transitionBuilder: (child, animation) {
+          return FadeTransition(
+            opacity: animation,
+            child: SlideTransition(
+              position: Tween<Offset>(
+                begin: const Offset(0.04, 0),
+                end: Offset.zero,
+              ).animate(animation),
+              child: child,
+            ),
+          );
+        },
+        child: KeyedSubtree(
+          key: ValueKey(_currentIndex),
+          child: _views[_currentIndex],
+        ),
+      ),
       bottomNavigationBar: Container(
         margin: EdgeInsets.symmetric(
           horizontal: MediaQuery.of(context).size.width * 0.2,

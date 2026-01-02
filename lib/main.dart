@@ -73,13 +73,16 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Consumer<ThemeProvider>(
-      builder: (context, themeProvider, _) {
+    return Consumer2<ThemeProvider, AuthProvider>(
+      builder: (context, themeProvider, authProvider, _) {
+        final accent = authProvider.accentColorValue == null
+            ? null
+            : Color(authProvider.accentColorValue!);
         return MaterialApp(
           title: 'Antigravity Todo & Habits',
           debugShowCheckedModeBanner: false,
-          theme: AppThemes.lightTheme,
-          darkTheme: AppThemes.darkTheme,
+          theme: AppThemes.themedWithAccent(isDark: false, accent: accent),
+          darkTheme: AppThemes.themedWithAccent(isDark: true, accent: accent),
           themeMode: themeProvider.themeMode,
           home: const AuthWrapper(),
         );

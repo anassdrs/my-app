@@ -1,7 +1,9 @@
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:hive_flutter/hive_flutter.dart';
+import 'package:adhan/adhan.dart' as adhan;
 import '../models/prayer.dart';
 import '../utils/boxes.dart';
+import '../utils/streak_utils.dart';
 
 // Events
 abstract class PrayerEvent {}
@@ -61,6 +63,18 @@ class PrayerBloc extends Bloc<PrayerEvent, PrayerState> {
     try {
       final box = Hive.box<Prayer>(HiveBoxes.prayers);
       final prayers = box.values.toList();
+      for (final prayer in prayers) {
+        if (!prayer.latitude.isFinite || !prayer.longitude.isFinite) {
+          prayer.latitude = 0;
+          prayer.longitude = 0;
+          await prayer.save();
+        }
+        final updatedTime = _getPrayerTimeForToday(prayer);
+        if (updatedTime != null && updatedTime != prayer.prayerTime) {
+          prayer.prayerTime = updatedTime;
+          await prayer.save();
+        }
+      }
       emit(PrayerLoaded(prayers));
     } catch (e) {
       emit(PrayerError(e.toString()));
@@ -123,28 +137,10 @@ class PrayerBloc extends Bloc<PrayerEvent, PrayerState> {
         event.prayer.completedDates.add(normalizedDate);
       }
 
-      // Recalculate streak
-      int streak = 0;
-      DateTime checkDate = DateTime.now();
-      checkDate = DateTime(checkDate.year, checkDate.month, checkDate.day);
-
-      if (event.prayer.isCompletedOn(checkDate)) {
-        while (event.prayer.isCompletedOn(checkDate)) {
-          streak++;
-          checkDate = checkDate.subtract(const Duration(days: 1));
-        }
-      } else {
-        DateTime yesterday = checkDate.subtract(const Duration(days: 1));
-        if (event.prayer.isCompletedOn(yesterday)) {
-          checkDate = yesterday;
-          while (event.prayer.isCompletedOn(checkDate)) {
-            streak++;
-            checkDate = checkDate.subtract(const Duration(days: 1));
-          }
-        }
-      }
-
-      event.prayer.streak = streak;
+      event.prayer.streak = calculateStreak(
+        event.prayer.completedDates,
+        DateTime.now(),
+      );
       await event.prayer.save();
       add(LoadPrayers());
     } catch (e) {
@@ -153,19 +149,42 @@ class PrayerBloc extends Bloc<PrayerEvent, PrayerState> {
   }
 
   List<int> getLast7DaysStats(List<Prayer> prayers) {
-    List<int> counts = [];
-    DateTime today = DateTime.now();
+    return last7DaysCompletionCounts(
+      prayers.map((prayer) => prayer.completedDates),
+      DateTime.now(),
+    );
+  }
 
-    for (int i = 6; i >= 0; i--) {
-      DateTime day = today.subtract(Duration(days: i));
-      int count = 0;
-      for (var prayer in prayers) {
-        if (prayer.isCompletedOn(day)) {
-          count++;
-        }
-      }
-      counts.add(count);
+  DateTime? _getPrayerTimeForToday(Prayer prayer) {
+    if (!prayer.latitude.isFinite || !prayer.longitude.isFinite) {
+      return null;
     }
-    return counts;
+    if (prayer.latitude == 0 && prayer.longitude == 0) {
+      return null;
+    }
+    final coordinates = adhan.Coordinates(prayer.latitude, prayer.longitude);
+    final params = adhan.CalculationMethod.muslim_world_league.getParameters();
+    params.madhab = adhan.Madhab.shafi;
+    final now = DateTime.now();
+    final dateComponents = adhan.DateComponents(
+      now.year,
+      now.month,
+      now.day,
+    );
+    final prayerTimes = adhan.PrayerTimes(coordinates, dateComponents, params);
+    switch (prayer.name.toLowerCase()) {
+      case 'fajr':
+        return prayerTimes.fajr;
+      case 'dhuhr':
+        return prayerTimes.dhuhr;
+      case 'asr':
+        return prayerTimes.asr;
+      case 'maghrib':
+        return prayerTimes.maghrib;
+      case 'isha':
+        return prayerTimes.isha;
+      default:
+        return null;
+    }
   }
 }

@@ -44,6 +44,13 @@ class _AddEditTodoScreenState extends State<AddEditTodoScreen> {
   }
 
   @override
+  void dispose() {
+    _titleController.dispose();
+    _descriptionController.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
@@ -336,6 +343,16 @@ class _AddEditTodoScreenState extends State<AddEditTodoScreen> {
 
   void _saveTodo() {
     if (_titleController.text.isEmpty) return;
+
+    if (_selectedEndTime != null &&
+        _selectedEndTime!.isBefore(_selectedDate)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('End time cannot be before the start time.'),
+        ),
+      );
+      return;
+    }
 
     if (widget.todo != null) {
       widget.todo!.title = _titleController.text;

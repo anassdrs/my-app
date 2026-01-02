@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:uuid/uuid.dart';
+import 'package:adhan/adhan.dart' as adhan;
 import '../../models/habit.dart';
 import '../../blocs/habit_bloc.dart';
 import '../../utils/constants.dart';
@@ -8,7 +10,17 @@ import '../../services/notification_service.dart';
 
 class AddEditHabitScreen extends StatefulWidget {
   final Habit? habit;
-  const AddEditHabitScreen({super.key, this.habit});
+  final String? initialTitle;
+  final String? initialDescription;
+  final String? initialHabitType;
+
+  const AddEditHabitScreen({
+    super.key,
+    this.habit,
+    this.initialTitle,
+    this.initialDescription,
+    this.initialHabitType,
+  });
 
   @override
   State<AddEditHabitScreen> createState() => _AddEditHabitScreenState();
@@ -20,18 +32,38 @@ class _AddEditHabitScreenState extends State<AddEditHabitScreen> {
   late TimeOfDay _startTime;
   String _habitType = 'general';
   final List<String> _prayerNames = ['Fajr', 'Dhuhr', 'Asr', 'Maghrib', 'Isha'];
+  adhan.PrayerTimes? _prayerTimes;
+  double? _latitude;
+  double? _longitude;
+  bool _isLoadingLocation = false;
+  String? _locationError;
 
   @override
   void initState() {
     super.initState();
-    _titleController = TextEditingController(text: widget.habit?.title ?? '');
+    _titleController = TextEditingController(
+      text: widget.habit?.title ?? widget.initialTitle ?? '',
+    );
     _descriptionController = TextEditingController(
-      text: widget.habit?.description ?? '',
+      text: widget.habit?.description ?? widget.initialDescription ?? '',
     );
     _startTime = widget.habit != null
         ? TimeOfDay.fromDateTime(widget.habit!.startTime)
         : TimeOfDay.now();
-    _habitType = widget.habit?.habitType ?? 'general';
+    _habitType = widget.habit?.habitType ?? widget.initialHabitType ?? 'general';
+    if (_habitType == 'prayer' && _titleController.text.isEmpty) {
+      _titleController.text = _prayerNames[0];
+    }
+    if (_habitType == 'prayer') {
+      _fetchLocationAndTimes();
+    }
+  }
+
+  @override
+  void dispose() {
+    _titleController.dispose();
+    _descriptionController.dispose();
+    super.dispose();
   }
 
   @override
@@ -56,14 +88,28 @@ class _AddEditHabitScreenState extends State<AddEditHabitScreen> {
             else
               _buildGeneralFields(),
             const SizedBox(height: 20),
+            if (_habitType == 'prayer' && _isLoadingLocation)
+              const LinearProgressIndicator(minHeight: 3),
+            if (_habitType == 'prayer' && _locationError != null)
+              Padding(
+                padding: const EdgeInsets.only(top: 8),
+                child: Text(
+                  _locationError!,
+                  style: AppTextStyles.bodyMedium.copyWith(
+                    color: Theme.of(context).colorScheme.error,
+                  ),
+                ),
+              ),
             GestureDetector(
-              onTap: _pickTime,
+              onTap: _habitType == 'prayer' ? null : _pickTime,
               child: Row(
                 children: [
                   Icon(Icons.access_time, color: AppColors.secondary),
                   const SizedBox(width: 10),
                   Text(
-                    "Reminder Time: ${_startTime.format(context)}",
+                    _habitType == 'prayer'
+                        ? "Prayer Time: ${_startTime.format(context)}"
+                        : "Reminder Time: ${_startTime.format(context)}",
                     style: AppTextStyles.bodyLarge,
                   ),
                 ],
@@ -114,6 +160,9 @@ class _AddEditHabitScreenState extends State<AddEditHabitScreen> {
             _titleController.text = _prayerNames[0];
           }
         });
+        if (type == 'prayer') {
+          _fetchLocationAndTimes();
+        }
       },
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 12),
@@ -191,6 +240,7 @@ class _AddEditHabitScreenState extends State<AddEditHabitScreen> {
                 setState(() {
                   _titleController.text = name;
                 });
+                _setPrayerTimeFromName();
               },
               child: Container(
                 padding: const EdgeInsets.symmetric(
@@ -233,6 +283,88 @@ class _AddEditHabitScreenState extends State<AddEditHabitScreen> {
         _startTime = picked;
       });
     }
+  }
+
+  Future<void> _fetchLocationAndTimes() async {
+    setState(() {
+      _isLoadingLocation = true;
+      _locationError = null;
+    });
+
+    try {
+      final serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      if (!serviceEnabled) {
+        throw 'Location services are disabled.';
+      }
+
+      var permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+      }
+      if (permission == LocationPermission.denied) {
+        throw 'Location permission denied.';
+      }
+      if (permission == LocationPermission.deniedForever) {
+        throw 'Location permission permanently denied.';
+      }
+
+      final position = await Geolocator.getCurrentPosition(
+        desiredAccuracy: LocationAccuracy.high,
+      );
+
+      if (!position.latitude.isFinite || !position.longitude.isFinite) {
+        throw 'Invalid location received.';
+      }
+
+      _latitude = position.latitude;
+      _longitude = position.longitude;
+      _calculatePrayerTimes();
+      _setPrayerTimeFromName();
+    } catch (e) {
+      _locationError = e.toString();
+      _prayerTimes = null;
+    } finally {
+      if (!mounted) return;
+      setState(() => _isLoadingLocation = false);
+    }
+  }
+
+  void _calculatePrayerTimes() {
+    if (_latitude == null || _longitude == null) {
+      _prayerTimes = null;
+      return;
+    }
+
+    final coordinates = adhan.Coordinates(_latitude!, _longitude!);
+    final params = adhan.CalculationMethod.muslim_world_league.getParameters();
+    params.madhab = adhan.Madhab.shafi;
+
+    final now = DateTime.now();
+    final dateComponents = adhan.DateComponents(now.year, now.month, now.day);
+    _prayerTimes = adhan.PrayerTimes(coordinates, dateComponents, params);
+  }
+
+  void _setPrayerTimeFromName() {
+    if (_prayerTimes == null) return;
+    DateTime? prayerTime;
+    final name = _titleController.text.toLowerCase();
+    switch (name) {
+      case 'fajr':
+        prayerTime = _prayerTimes!.fajr;
+      case 'dhuhr':
+        prayerTime = _prayerTimes!.dhuhr;
+      case 'asr':
+        prayerTime = _prayerTimes!.asr;
+      case 'maghrib':
+        prayerTime = _prayerTimes!.maghrib;
+      case 'isha':
+        prayerTime = _prayerTimes!.isha;
+    }
+
+    if (prayerTime == null) return;
+    setState(() {
+      _startTime = TimeOfDay.fromDateTime(prayerTime!);
+    });
   }
 
   void _saveHabit() {

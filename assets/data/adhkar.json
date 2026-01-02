@@ -1,0 +1,30 @@
+[
+  {
+    "title": "Morning Remembrance",
+    "text": "SubhanAllah, Alhamdulillah, Allahu Akbar",
+    "transliteration": "SubhanAllah, Alhamdulillah, Allahu Akbar",
+    "translation": "Glory be to Allah, praise be to Allah, Allah is the Greatest.",
+    "repeat": 33
+  },
+  {
+    "title": "Evening Reflection",
+    "text": "La ilaha illallah wahdahu la sharika lah",
+    "transliteration": "La ilaha illallah wahdahu la sharika lah",
+    "translation": "There is no god but Allah, alone without partner.",
+    "repeat": 100
+  },
+  {
+    "title": "Seeking Forgiveness",
+    "text": "Astaghfirullah",
+    "transliteration": "Astaghfirullah",
+    "translation": "I seek forgiveness from Allah.",
+    "repeat": 100
+  },
+  {
+    "title": "Before Sleep",
+    "text": "Bismika Allahumma amutu wa ahya",
+    "transliteration": "Bismika Allahumma amutu wa ahya",
+    "translation": "In Your name, O Allah, I die and I live.",
+    "repeat": 1
+  }
+]

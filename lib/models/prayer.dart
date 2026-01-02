@@ -28,6 +28,9 @@ class Prayer extends HiveObject {
   @HiveField(7)
   double longitude;
 
+  @HiveField(8)
+  int reminderMinutes;
+
   Prayer({
     required this.id,
     required this.name,
@@ -37,6 +40,7 @@ class Prayer extends HiveObject {
     required this.longitude,
     List<DateTime>? completedDates,
     this.streak = 0,
+    this.reminderMinutes = 0,
   }) : completedDates = completedDates ?? [];
 
   bool isCompletedOn(DateTime date) {

@@ -5,7 +5,7 @@ class AppColors {
   // Dark Theme Colors
   static const Color background = Color(0xFF121212);
   static const Color surface = Color(0xFF1E1E1E);
-  static const Color primary = Color(0xFF6C63FF); // Vibrant Purple
+  static const Color primary = Colors.blue; // Vibrant Purple
   static const Color secondary = Color(0xFF03DAC6); // Teal
   static const Color error = Color(0xFFCF6679);
   static const Color textPrimary = Color(0xFFFFFFFF);
@@ -51,7 +51,7 @@ class AppThemes {
   static final ThemeData lightTheme = ThemeData(
     brightness: Brightness.light,
     scaffoldBackgroundColor: AppColors.lightBackground,
-    primaryColor: AppColors.primary,
+    primaryColor: Colors.blue,
     colorScheme: const ColorScheme.light(
       primary: AppColors.primary,
       secondary: AppColors.secondary,
@@ -65,4 +65,23 @@ class AppThemes {
     ),
     useMaterial3: true,
   );
+
+  static ThemeData themedWithAccent({required bool isDark, Color? accent}) {
+    final base = isDark ? darkTheme : lightTheme;
+    final resolvedAccent = accent ?? AppColors.primary;
+    return base.copyWith(
+      primaryColor: resolvedAccent,
+      colorScheme: base.colorScheme.copyWith(primary: resolvedAccent),
+      floatingActionButtonTheme: base.floatingActionButtonTheme.copyWith(
+        backgroundColor: resolvedAccent,
+        foregroundColor: Colors.white,
+      ),
+      elevatedButtonTheme: ElevatedButtonThemeData(
+        style: ElevatedButton.styleFrom(
+          backgroundColor: resolvedAccent,
+          foregroundColor: Colors.white,
+        ),
+      ),
+    );
+  }
 }

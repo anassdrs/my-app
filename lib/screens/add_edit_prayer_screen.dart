@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:uuid/uuid.dart';
 import 'package:adhan/adhan.dart' as adhan;
 import '../../models/prayer.dart';
@@ -18,10 +19,13 @@ class AddEditPrayerScreen extends StatefulWidget {
 class _AddEditPrayerScreenState extends State<AddEditPrayerScreen> {
   late TextEditingController _titleController;
   late TextEditingController _descriptionController;
-  late TextEditingController _latitudeController;
-  late TextEditingController _longitudeController;
   adhan.PrayerTimes? _prayerTimes;
   String? _selectedPrayerName;
+  double? _latitude;
+  double? _longitude;
+  bool _isLoadingLocation = false;
+  String? _locationError;
+  int _reminderMinutes = 0;
 
   final List<String> _prayerNames = ['Fajr', 'Dhuhr', 'Asr', 'Maghrib', 'Isha'];
 
@@ -32,42 +36,67 @@ class _AddEditPrayerScreenState extends State<AddEditPrayerScreen> {
     _descriptionController = TextEditingController(
       text: widget.prayer?.description ?? '',
     );
-    _latitudeController = TextEditingController(
-      text: widget.prayer?.latitude.toString() ?? '',
-    );
-    _longitudeController = TextEditingController(
-      text: widget.prayer?.longitude.toString() ?? '',
-    );
     _selectedPrayerName = widget.prayer?.name ?? _prayerNames.first;
-    _calculatePrayerTimes();
+    _reminderMinutes = widget.prayer?.reminderMinutes ?? 0;
+    _fetchLocationAndTimes();
+  }
+
+  Future<void> _fetchLocationAndTimes() async {
+    setState(() {
+      _isLoadingLocation = true;
+      _locationError = null;
+    });
+
+    try {
+      final serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      if (!serviceEnabled) {
+        throw 'Location services are disabled.';
+      }
+
+      var permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+      }
+      if (permission == LocationPermission.denied) {
+        throw 'Location permission denied.';
+      }
+      if (permission == LocationPermission.deniedForever) {
+        throw 'Location permission permanently denied.';
+      }
+
+      final position = await Geolocator.getCurrentPosition(
+        desiredAccuracy: LocationAccuracy.high,
+      );
+
+      if (!position.latitude.isFinite || !position.longitude.isFinite) {
+        throw 'Invalid location received.';
+      }
+
+      _latitude = position.latitude;
+      _longitude = position.longitude;
+      _calculatePrayerTimes();
+    } catch (e) {
+      _locationError = e.toString();
+      _prayerTimes = null;
+    } finally {
+      if (!mounted) return;
+      setState(() => _isLoadingLocation = false);
+    }
   }
 
   void _calculatePrayerTimes() {
-    if (_latitudeController.text.isNotEmpty &&
-        _longitudeController.text.isNotEmpty) {
-      try {
-        final latitude = double.parse(_latitudeController.text);
-        final longitude = double.parse(_longitudeController.text);
-
-        final coordinates = adhan.Coordinates(latitude, longitude);
-        final params = adhan.CalculationMethod.muslim_world_league
-            .getParameters();
-        params.madhab = adhan.Madhab.shafi;
-
-        final now = DateTime.now();
-        final dateComponents = adhan.DateComponents(
-          now.year,
-          now.month,
-          now.day,
-        );
-        _prayerTimes = adhan.PrayerTimes(coordinates, dateComponents, params);
-        setState(() {});
-      } catch (e) {
-        // Invalid coordinates
-        _prayerTimes = null;
-        setState(() {});
-      }
+    if (_latitude == null || _longitude == null) {
+      _prayerTimes = null;
+      return;
     }
+
+    final coordinates = adhan.Coordinates(_latitude!, _longitude!);
+    final params = adhan.CalculationMethod.muslim_world_league.getParameters();
+    params.madhab = adhan.Madhab.shafi;
+
+    final now = DateTime.now();
+    final dateComponents = adhan.DateComponents(now.year, now.month, now.day);
+    _prayerTimes = adhan.PrayerTimes(coordinates, dateComponents, params);
   }
 
   DateTime? _getPrayerTime(String prayerName) {
@@ -134,30 +163,36 @@ class _AddEditPrayerScreenState extends State<AddEditPrayerScreen> {
               ),
             ),
             const SizedBox(height: 20),
+            if (_isLoadingLocation)
+              const LinearProgressIndicator(minHeight: 3),
+            if (_locationError != null)
+              Padding(
+                padding: const EdgeInsets.only(top: 12),
+                child: Text(
+                  _locationError!,
+                  style: AppTextStyles.bodyMedium.copyWith(
+                    color: Theme.of(context).colorScheme.error,
+                  ),
+                ),
+              ),
+            const SizedBox(height: 12),
             Row(
               children: [
                 Expanded(
-                  child: TextField(
-                    controller: _latitudeController,
-                    keyboardType: TextInputType.number,
-                    decoration: const InputDecoration(
-                      labelText: "Latitude",
-                      border: OutlineInputBorder(),
-                    ),
-                    onChanged: (_) => _calculatePrayerTimes(),
+                  child: Text(
+                    _latitude == null || _longitude == null
+                        ? 'Location not set'
+                        : 'Lat ${_latitude!.toStringAsFixed(4)}, '
+                            'Lng ${_longitude!.toStringAsFixed(4)}',
+                    style: AppTextStyles.bodyMedium,
                   ),
                 ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: TextField(
-                    controller: _longitudeController,
-                    keyboardType: TextInputType.number,
-                    decoration: const InputDecoration(
-                      labelText: "Longitude",
-                      border: OutlineInputBorder(),
-                    ),
-                    onChanged: (_) => _calculatePrayerTimes(),
-                  ),
+                TextButton.icon(
+                  onPressed: _isLoadingLocation
+                      ? null
+                      : () => _fetchLocationAndTimes(),
+                  icon: const Icon(Icons.my_location, size: 18),
+                  label: const Text('Use GPS'),
                 ),
               ],
             ),
@@ -185,6 +220,39 @@ class _AddEditPrayerScreenState extends State<AddEditPrayerScreen> {
                   ),
                 ),
               ),
+            const SizedBox(height: 16),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  "Reminder",
+                  style: AppTextStyles.bodyLarge.copyWith(
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  _reminderMinutes == 0
+                      ? "At prayer time"
+                      : "$_reminderMinutes minutes before",
+                  style: AppTextStyles.bodyMedium,
+                ),
+                Slider(
+                  value: _reminderMinutes.toDouble(),
+                  min: 0,
+                  max: 60,
+                  divisions: 12,
+                  label: _reminderMinutes == 0
+                      ? "At time"
+                      : "$_reminderMinutes min",
+                  onChanged: (value) {
+                    setState(() {
+                      _reminderMinutes = value.round();
+                    });
+                  },
+                ),
+              ],
+            ),
             const Spacer(),
             SizedBox(
               width: double.infinity,
@@ -211,32 +279,23 @@ class _AddEditPrayerScreenState extends State<AddEditPrayerScreen> {
   }
 
   void _savePrayer() {
-    if (_titleController.text.isEmpty ||
-        _latitudeController.text.isEmpty ||
-        _longitudeController.text.isEmpty) {
+    if (_titleController.text.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please fill in all required fields')),
+        const SnackBar(content: Text('Please enter a prayer name')),
       );
       return;
     }
 
-    final latitude = double.tryParse(_latitudeController.text);
-    final longitude = double.tryParse(_longitudeController.text);
-
-    if (latitude == null || longitude == null) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('Invalid coordinates')));
-      return;
-    }
-
     final prayerTime = _getPrayerTime(_selectedPrayerName!);
+    final latitude = _latitude ?? 0;
+    final longitude = _longitude ?? 0;
 
     if (widget.prayer != null) {
       widget.prayer!.name = _titleController.text;
       widget.prayer!.description = _descriptionController.text;
       widget.prayer!.latitude = latitude;
       widget.prayer!.longitude = longitude;
+      widget.prayer!.reminderMinutes = _reminderMinutes;
       if (prayerTime != null) {
         widget.prayer!.prayerTime = prayerTime;
       }
@@ -244,11 +303,12 @@ class _AddEditPrayerScreenState extends State<AddEditPrayerScreen> {
 
       // Update notification
       if (prayerTime != null) {
+        final reminderTime = _getReminderTime(prayerTime, _reminderMinutes);
         NotificationService().scheduleDailyHabitNotification(
           id: widget.prayer!.id.hashCode,
           title: 'Prayer Reminder: ${widget.prayer!.name}',
           body: 'Time for ${_selectedPrayerName!} prayer',
-          time: TimeOfDay.fromDateTime(prayerTime),
+          time: TimeOfDay.fromDateTime(reminderTime),
         );
       }
     } else {
@@ -259,16 +319,18 @@ class _AddEditPrayerScreenState extends State<AddEditPrayerScreen> {
         latitude: latitude,
         longitude: longitude,
         prayerTime: prayerTime ?? DateTime.now(), // Provide default if null
+        reminderMinutes: _reminderMinutes,
       );
       context.read<PrayerBloc>().add(AddPrayerEvent(newPrayer));
 
       // Schedule notification
       if (prayerTime != null) {
+        final reminderTime = _getReminderTime(prayerTime, _reminderMinutes);
         NotificationService().scheduleDailyHabitNotification(
           id: newPrayer.id.hashCode,
           title: 'Prayer Reminder: ${newPrayer.name}',
           body: 'Time for ${_selectedPrayerName!} prayer',
-          time: TimeOfDay.fromDateTime(prayerTime),
+          time: TimeOfDay.fromDateTime(reminderTime),
         );
       }
     }
@@ -280,8 +342,17 @@ class _AddEditPrayerScreenState extends State<AddEditPrayerScreen> {
   void dispose() {
     _titleController.dispose();
     _descriptionController.dispose();
-    _latitudeController.dispose();
-    _longitudeController.dispose();
     super.dispose();
+  }
+
+  DateTime _getReminderTime(DateTime prayerTime, int minutesBefore) {
+    if (minutesBefore <= 0) return prayerTime;
+    final reminderTime = prayerTime.subtract(
+      Duration(minutes: minutesBefore),
+    );
+    if (reminderTime.day != prayerTime.day) {
+      return prayerTime;
+    }
+    return reminderTime;
   }
 }

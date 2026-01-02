@@ -23,6 +23,7 @@ class PrayerAdapter extends TypeAdapter<Prayer> {
       prayerTime: fields[5] as DateTime,
       latitude: fields[6] as double,
       longitude: fields[7] as double,
+      reminderMinutes: fields[8] as int? ?? 0,
       completedDates: (fields[2] as List?)?.cast<DateTime>(),
       streak: fields[3] as int,
     );
@@ -31,7 +32,7 @@ class PrayerAdapter extends TypeAdapter<Prayer> {
   @override
   void write(BinaryWriter writer, Prayer obj) {
     writer
-      ..writeByte(8)
+      ..writeByte(9)
       ..writeByte(0)
       ..write(obj.id)
       ..writeByte(1)
@@ -47,7 +48,9 @@ class PrayerAdapter extends TypeAdapter<Prayer> {
       ..writeByte(6)
       ..write(obj.latitude)
       ..writeByte(7)
-      ..write(obj.longitude);
+      ..write(obj.longitude)
+      ..writeByte(8)
+      ..write(obj.reminderMinutes);
   }
 
   @override
