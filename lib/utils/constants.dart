@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 
 class AppColors {
   // Dark Theme Colors
@@ -19,20 +18,21 @@ class AppColors {
 
 class AppTextStyles {
   static TextStyle get heading1 =>
-      GoogleFonts.outfit(fontSize: 28, fontWeight: FontWeight.bold);
+      const TextStyle(fontSize: 28, fontWeight: FontWeight.bold);
 
   static TextStyle get heading2 =>
-      GoogleFonts.outfit(fontSize: 22, fontWeight: FontWeight.w600);
+      const TextStyle(fontSize: 22, fontWeight: FontWeight.w600);
 
-  static TextStyle get bodyLarge => GoogleFonts.inter(fontSize: 16);
+  static TextStyle get bodyLarge => const TextStyle(fontSize: 16);
 
-  static TextStyle get bodyMedium => GoogleFonts.inter(fontSize: 14);
+  static TextStyle get bodyMedium => const TextStyle(fontSize: 14);
 }
 
 class AppThemes {
   static final ThemeData darkTheme = ThemeData(
     brightness: Brightness.dark,
-    scaffoldBackgroundColor: AppColors.background,
+    scaffoldBackgroundColor: const Color(0xFF222831),
+    fontFamily: 'Arial',
     primaryColor: AppColors.primary,
     colorScheme: const ColorScheme.dark(
       primary: AppColors.primary,
@@ -41,7 +41,7 @@ class AppThemes {
       error: AppColors.error,
       onSurface: AppColors.textPrimary,
     ),
-    textTheme: GoogleFonts.outfitTextTheme(ThemeData.dark().textTheme).apply(
+    textTheme: ThemeData.dark().textTheme.apply(
       bodyColor: AppColors.textPrimary,
       displayColor: AppColors.textPrimary,
     ),
@@ -51,6 +51,7 @@ class AppThemes {
   static final ThemeData lightTheme = ThemeData(
     brightness: Brightness.light,
     scaffoldBackgroundColor: AppColors.lightBackground,
+
     primaryColor: Colors.blue,
     colorScheme: const ColorScheme.light(
       primary: AppColors.primary,
@@ -59,7 +60,7 @@ class AppThemes {
       error: AppColors.error,
       onSurface: AppColors.lightTextPrimary,
     ),
-    textTheme: GoogleFonts.outfitTextTheme(ThemeData.light().textTheme).apply(
+    textTheme: ThemeData.light().textTheme.apply(
       bodyColor: AppColors.lightTextPrimary,
       displayColor: AppColors.lightTextPrimary,
     ),

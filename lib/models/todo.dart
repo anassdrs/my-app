@@ -2,6 +2,24 @@ import 'package:hive/hive.dart';
 
 part 'todo.g.dart';
 
+@HiveType(typeId: 4)
+class TodoSubtask {
+  @HiveField(0)
+  final String id;
+
+  @HiveField(1)
+  String title;
+
+  @HiveField(2)
+  bool completed;
+
+  TodoSubtask({
+    required this.id,
+    required this.title,
+    this.completed = false,
+  });
+}
+
 @HiveType(typeId: 0)
 class Todo extends HiveObject {
   @HiveField(0)
@@ -19,6 +37,57 @@ class Todo extends HiveObject {
   @HiveField(4)
   bool isCompleted;
 
+  @HiveField(8)
+  String status; // active, in_progress, paused, done, missed, archived
+
+  @HiveField(9)
+  DateTime? completedAt;
+
+  @HiveField(10)
+  bool xpApplied;
+
+  @HiveField(11)
+  bool isFocused;
+
+  @HiveField(12)
+  DateTime? focusDate;
+
+  @HiveField(13)
+  DateTime? focusBonusAwardedAt;
+
+  @HiveField(14)
+  List<TodoSubtask> subtasks;
+
+  @HiveField(15)
+  String? linkedHabitId;
+
+  @HiveField(16)
+  String? memorizationStatus; // only for Quran Memorization category
+
+  @HiveField(17)
+  DateTime? reviewDueDate;
+
+  @HiveField(18)
+  int? reviewIntervalDays;
+
+  @HiveField(19)
+  DateTime? lastReviewedAt;
+
+  @HiveField(20)
+  int? reviewRepeatCount;
+
+  @HiveField(21)
+  Duration? reviewInterval;
+
+  @HiveField(22)
+  int? surahNumber;
+
+  @HiveField(23)
+  int? startAyah;
+
+  @HiveField(24)
+  int? endAyah;
+
   @HiveField(5)
   DateTime? endTime;
 
@@ -34,10 +103,28 @@ class Todo extends HiveObject {
     this.description = '',
     required this.date,
     this.isCompleted = false,
+    String? status,
+    this.completedAt,
+    this.xpApplied = false,
+    this.isFocused = false,
+    this.focusDate,
+    this.focusBonusAwardedAt,
+    List<TodoSubtask>? subtasks,
+    this.linkedHabitId,
+    this.memorizationStatus,
+    this.reviewDueDate,
+    this.reviewIntervalDays,
+    this.lastReviewedAt,
+    this.reviewRepeatCount,
+    this.reviewInterval,
+    this.surahNumber,
+    this.startAyah,
+    this.endAyah,
     this.endTime,
     this.priority = 1, // Default to Medium
     this.category = 'General',
-  });
+  }) : status = status ?? (isCompleted ? 'done' : 'active'),
+       subtasks = subtasks ?? [];
 }
 
 enum TodoPriority {

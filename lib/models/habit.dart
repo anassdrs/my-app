@@ -28,6 +28,27 @@ class Habit extends HiveObject {
   @HiveField(7)
   String habitType; // 'general' or 'prayer'
 
+  @HiveField(8)
+  String frequencyType; // daily, weekly, custom_days
+
+  @HiveField(9)
+  int frequencyValue; // weekly count
+
+  @HiveField(10)
+  List<int> customDays; // 1 = Monday ... 7 = Sunday
+
+  @HiveField(11)
+  int windowStartMinutes;
+
+  @HiveField(12)
+  int windowEndMinutes;
+
+  @HiveField(13)
+  List<String> evaluatedDates;
+
+  @HiveField(14)
+  DateTime? lastEvaluatedDate;
+
   Habit({
     required this.id,
     required this.title,
@@ -37,8 +58,24 @@ class Habit extends HiveObject {
     this.streak = 0,
     this.category = 'General',
     this.habitType = 'general',
+    this.frequencyType = 'daily',
+    this.frequencyValue = 1,
+    List<int>? customDays,
+    int? windowStartMinutes,
+    int? windowEndMinutes,
+    List<String>? evaluatedDates,
+    this.lastEvaluatedDate,
   }) : completedDates = completedDates ?? [],
-       startTime = startTime ?? DateTime.now();
+       customDays = customDays ?? [],
+       evaluatedDates = evaluatedDates ?? [],
+       startTime = startTime ?? DateTime.now(),
+       windowStartMinutes =
+           windowStartMinutes ?? (startTime ?? DateTime.now()).hour * 60 +
+               (startTime ?? DateTime.now()).minute,
+       windowEndMinutes =
+           windowEndMinutes ?? (startTime ?? DateTime.now()).hour * 60 +
+               (startTime ?? DateTime.now()).minute +
+               60;
 
   bool isCompletedOn(DateTime date) {
     return completedDates.any(

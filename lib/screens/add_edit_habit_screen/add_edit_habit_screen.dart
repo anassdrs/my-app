@@ -1,14 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:geolocator/geolocator.dart';
-import 'package:uuid/uuid.dart';
-import 'package:adhan/adhan.dart' as adhan;
 import '../../models/habit.dart';
 import '../../blocs/habit_bloc.dart';
+import '../../blocs/add_edit_habit_bloc.dart';
 import '../../utils/constants.dart';
-import '../../services/notification_service.dart';
+import '../../widgets/primary_button.dart';
 
-class AddEditHabitScreen extends StatefulWidget {
+class AddEditHabitScreen extends StatelessWidget {
   final Habit? habit;
   final String? initialTitle;
   final String? initialDescription;
@@ -23,40 +21,62 @@ class AddEditHabitScreen extends StatefulWidget {
   });
 
   @override
-  State<AddEditHabitScreen> createState() => _AddEditHabitScreenState();
+  Widget build(BuildContext context) {
+    return BlocProvider(
+      create: (context) =>
+          AddEditHabitBloc(habitBloc: context.read<HabitBloc>())..add(
+            InitializeHabitEvent(
+              habit: habit,
+              initialTitle: initialTitle,
+              initialDescription: initialDescription,
+              initialHabitType: initialHabitType,
+            ),
+          ),
+      child: const _AddEditHabitView(),
+    );
+  }
 }
 
-class _AddEditHabitScreenState extends State<AddEditHabitScreen> {
+class _AddEditHabitView extends StatefulWidget {
+  const _AddEditHabitView();
+
+  @override
+  State<_AddEditHabitView> createState() => _AddEditHabitViewState();
+}
+
+class _AddEditHabitViewState extends State<_AddEditHabitView> {
   late TextEditingController _titleController;
   late TextEditingController _descriptionController;
-  late TimeOfDay _startTime;
-  String _habitType = 'general';
+
+  static const Map<int, String> _weekdayLabels = {
+    DateTime.monday: 'Mon',
+    DateTime.tuesday: 'Tue',
+    DateTime.wednesday: 'Wed',
+    DateTime.thursday: 'Thu',
+    DateTime.friday: 'Fri',
+    DateTime.saturday: 'Sat',
+    DateTime.sunday: 'Sun',
+  };
+
   final List<String> _prayerNames = ['Fajr', 'Dhuhr', 'Asr', 'Maghrib', 'Isha'];
-  adhan.PrayerTimes? _prayerTimes;
-  double? _latitude;
-  double? _longitude;
-  bool _isLoadingLocation = false;
-  String? _locationError;
 
   @override
   void initState() {
     super.initState();
-    _titleController = TextEditingController(
-      text: widget.habit?.title ?? widget.initialTitle ?? '',
-    );
-    _descriptionController = TextEditingController(
-      text: widget.habit?.description ?? widget.initialDescription ?? '',
-    );
-    _startTime = widget.habit != null
-        ? TimeOfDay.fromDateTime(widget.habit!.startTime)
-        : TimeOfDay.now();
-    _habitType = widget.habit?.habitType ?? widget.initialHabitType ?? 'general';
-    if (_habitType == 'prayer' && _titleController.text.isEmpty) {
-      _titleController.text = _prayerNames[0];
-    }
-    if (_habitType == 'prayer') {
-      _fetchLocationAndTimes();
-    }
+    final state = context.read<AddEditHabitBloc>().state;
+    _titleController = TextEditingController(text: state.title);
+    _descriptionController = TextEditingController(text: state.description);
+
+    _titleController.addListener(() {
+      context.read<AddEditHabitBloc>().add(
+        UpdateHabitFieldsEvent(title: _titleController.text),
+      );
+    });
+    _descriptionController.addListener(() {
+      context.read<AddEditHabitBloc>().add(
+        UpdateHabitFieldsEvent(description: _descriptionController.text),
+      );
+    });
   }
 
   @override
@@ -68,101 +88,107 @@ class _AddEditHabitScreenState extends State<AddEditHabitScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(
-          widget.habit == null ? "New Habit" : "Edit Habit",
-          style: AppTextStyles.heading2,
-        ),
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-      ),
-      body: Padding(
-        padding: const EdgeInsets.all(20.0),
-        child: Column(
-          children: [
-            _buildTypeSelector(),
-            const SizedBox(height: 20),
-            if (_habitType == 'prayer')
-              _buildPrayerSelector()
-            else
-              _buildGeneralFields(),
-            const SizedBox(height: 20),
-            if (_habitType == 'prayer' && _isLoadingLocation)
-              const LinearProgressIndicator(minHeight: 3),
-            if (_habitType == 'prayer' && _locationError != null)
-              Padding(
-                padding: const EdgeInsets.only(top: 8),
-                child: Text(
-                  _locationError!,
-                  style: AppTextStyles.bodyMedium.copyWith(
-                    color: Theme.of(context).colorScheme.error,
-                  ),
-                ),
+    return BlocListener<AddEditHabitBloc, AddEditHabitState>(
+      listener: (context, state) {
+        if (state.isSuccess) Navigator.pop(context);
+        if (state.error != null) {
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(SnackBar(content: Text(state.error!)));
+        }
+      },
+      child: BlocBuilder<AddEditHabitBloc, AddEditHabitState>(
+        builder: (context, state) {
+          return Scaffold(
+            appBar: AppBar(
+              title: Text(
+                state.initialHabit == null ? "New Habit" : "Edit Habit",
+                style: AppTextStyles.heading2,
               ),
-            GestureDetector(
-              onTap: _habitType == 'prayer' ? null : _pickTime,
-              child: Row(
-                children: [
-                  Icon(Icons.access_time, color: AppColors.secondary),
-                  const SizedBox(width: 10),
-                  Text(
-                    _habitType == 'prayer'
-                        ? "Prayer Time: ${_startTime.format(context)}"
-                        : "Reminder Time: ${_startTime.format(context)}",
-                    style: AppTextStyles.bodyLarge,
-                  ),
-                ],
-              ),
+              backgroundColor: Colors.transparent,
+              elevation: 0,
             ),
-            const Spacer(),
-            SizedBox(
-              width: double.infinity,
-              height: 50,
-              child: ElevatedButton(
-                onPressed: _saveHabit,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.secondary,
-                  foregroundColor: Colors.black,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(15),
-                  ),
-                ),
-                child: const Text(
-                  "Start Habit",
-                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+            body: SafeArea(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(20.0),
+                child: Column(
+                  children: [
+                    _buildTypeSelector(context, state),
+                    const SizedBox(height: 20),
+                    if (state.habitType == 'prayer')
+                      _buildPrayerSelector(context, state)
+                    else
+                      _buildGeneralFields(context, state),
+                    const SizedBox(height: 20),
+                    _buildFrequencySection(context, state),
+                    const SizedBox(height: 16),
+                    _buildTimeWindowSection(context, state),
+                    const SizedBox(height: 16),
+                    if (state.habitType == 'prayer' && state.isLoadingLocation)
+                      const LinearProgressIndicator(minHeight: 3),
+                    if (state.habitType == 'prayer' &&
+                        state.locationError != null)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 8),
+                        child: Text(
+                          state.locationError!,
+                          style: AppTextStyles.bodyMedium.copyWith(
+                            color: Theme.of(context).colorScheme.error,
+                          ),
+                        ),
+                      ),
+                    const SizedBox(height: 20),
+                    PrimaryButton(
+                      label: "Start Habit",
+                      onPressed: () => context.read<AddEditHabitBloc>().add(
+                        SaveHabitEvent(),
+                      ),
+                      backgroundColor: AppColors.secondary,
+                      foregroundColor: Colors.black,
+                    ),
+                  ],
                 ),
               ),
             ),
-          ],
-        ),
+          );
+        },
       ),
     );
   }
 
-  Widget _buildTypeSelector() {
+  Widget _buildTypeSelector(BuildContext context, AddEditHabitState state) {
     return Row(
       children: [
-        Expanded(child: _typeChip('General', 'general', Icons.auto_awesome)),
+        Expanded(
+          child: _typeChip(
+            context,
+            state,
+            'General',
+            'general',
+            Icons.auto_awesome,
+          ),
+        ),
         const SizedBox(width: 10),
-        Expanded(child: _typeChip('Prayer', 'prayer', Icons.mosque)),
+        Expanded(
+          child: _typeChip(context, state, 'Prayer', 'prayer', Icons.mosque),
+        ),
       ],
     );
   }
 
-  Widget _typeChip(String label, String type, IconData icon) {
-    final isSelected = _habitType == type;
+  Widget _typeChip(
+    BuildContext context,
+    AddEditHabitState state,
+    String label,
+    String type,
+    IconData icon,
+  ) {
+    final isSelected = state.habitType == type;
     return GestureDetector(
       onTap: () {
-        setState(() {
-          _habitType = type;
-          if (type == 'prayer' && _titleController.text.isEmpty) {
-            _titleController.text = _prayerNames[0];
-          }
-        });
-        if (type == 'prayer') {
-          _fetchLocationAndTimes();
-        }
+        context.read<AddEditHabitBloc>().add(
+          UpdateHabitFieldsEvent(habitType: type),
+        );
       },
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 12),
@@ -172,7 +198,7 @@ class _AddEditHabitScreenState extends State<AddEditHabitScreen> {
           border: Border.all(
             color: isSelected
                 ? AppColors.secondary
-                : Colors.grey.withOpacity(0.3),
+                : Colors.grey.withValues(alpha: 0.3),
           ),
         ),
         child: Row(
@@ -197,7 +223,7 @@ class _AddEditHabitScreenState extends State<AddEditHabitScreen> {
     );
   }
 
-  Widget _buildGeneralFields() {
+  Widget _buildGeneralFields(BuildContext context, AddEditHabitState state) {
     return Column(
       children: [
         TextField(
@@ -224,7 +250,7 @@ class _AddEditHabitScreenState extends State<AddEditHabitScreen> {
     );
   }
 
-  Widget _buildPrayerSelector() {
+  Widget _buildPrayerSelector(BuildContext context, AddEditHabitState state) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -234,13 +260,11 @@ class _AddEditHabitScreenState extends State<AddEditHabitScreen> {
           spacing: 8,
           runSpacing: 8,
           children: _prayerNames.map((name) {
-            final isSelected = _titleController.text == name;
+            final isSelected = state.title == name;
             return GestureDetector(
               onTap: () {
-                setState(() {
-                  _titleController.text = name;
-                });
-                _setPrayerTimeFromName();
+                _titleController.text = name;
+                context.read<AddEditHabitBloc>().add(FetchHabitLocationEvent());
               },
               child: Container(
                 padding: const EdgeInsets.symmetric(
@@ -253,7 +277,7 @@ class _AddEditHabitScreenState extends State<AddEditHabitScreen> {
                   border: Border.all(
                     color: isSelected
                         ? AppColors.secondary
-                        : Colors.grey.withOpacity(0.3),
+                        : Colors.grey.withValues(alpha: 0.3),
                   ),
                 ),
                 child: Text(
@@ -273,154 +297,210 @@ class _AddEditHabitScreenState extends State<AddEditHabitScreen> {
     );
   }
 
-  Future<void> _pickTime() async {
-    final TimeOfDay? picked = await showTimePicker(
-      context: context,
-      initialTime: _startTime,
+  Widget _buildFrequencySection(BuildContext context, AddEditHabitState state) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          "Frequency",
+          style: AppTextStyles.bodyLarge.copyWith(fontWeight: FontWeight.bold),
+        ),
+        const SizedBox(height: 8),
+        DropdownButtonFormField<String>(
+          initialValue: state.frequencyType,
+          items: const [
+            DropdownMenuItem(value: 'daily', child: Text('Daily')),
+            DropdownMenuItem(value: 'weekly', child: Text('Weekly')),
+            DropdownMenuItem(value: 'custom_days', child: Text('Custom Days')),
+          ],
+          onChanged: (val) {
+            if (val != null) {
+              context.read<AddEditHabitBloc>().add(
+                UpdateHabitFieldsEvent(
+                  frequencyType: val,
+                  customDays: val == 'custom_days' && state.customDays.isEmpty
+                      ? [DateTime.now().weekday]
+                      : null,
+                ),
+              );
+            }
+          },
+          decoration: InputDecoration(
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+          ),
+        ),
+        if (state.frequencyType == 'weekly') ...[
+          const SizedBox(height: 12),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text("Times per week", style: AppTextStyles.bodyMedium),
+              DropdownButton<int>(
+                value: state.frequencyValue,
+                items: List.generate(
+                  7,
+                  (i) =>
+                      DropdownMenuItem(value: i + 1, child: Text("${i + 1}")),
+                ),
+                onChanged: (val) {
+                  if (val != null) {
+                    context.read<AddEditHabitBloc>().add(
+                      UpdateHabitFieldsEvent(frequencyValue: val),
+                    );
+                  }
+                },
+              ),
+            ],
+          ),
+        ],
+        if (state.frequencyType == 'custom_days') ...[
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: _weekdayLabels.entries.map((entry) {
+              final isSelected = state.customDays.contains(entry.key);
+              return GestureDetector(
+                onTap: () {
+                  final newDays = List<int>.from(state.customDays);
+                  if (isSelected && newDays.length > 1) {
+                    newDays.remove(entry.key);
+                  } else {
+                    newDays.add(entry.key);
+                  }
+                  context.read<AddEditHabitBloc>().add(
+                    UpdateHabitFieldsEvent(customDays: newDays),
+                  );
+                },
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 6,
+                  ),
+                  decoration: BoxDecoration(
+                    color: isSelected ? AppColors.secondary : AppColors.surface,
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(
+                      color: isSelected
+                          ? AppColors.secondary
+                          : Colors.grey.withValues(alpha: 0.3),
+                    ),
+                  ),
+                  child: Text(
+                    entry.value,
+                    style: TextStyle(
+                      color: isSelected ? Colors.black : Colors.grey,
+                      fontWeight: isSelected
+                          ? FontWeight.bold
+                          : FontWeight.normal,
+                    ),
+                  ),
+                ),
+              );
+            }).toList(),
+          ),
+        ],
+      ],
     );
-    if (picked != null && picked != _startTime) {
-      setState(() {
-        _startTime = picked;
-      });
-    }
   }
 
-  Future<void> _fetchLocationAndTimes() async {
-    setState(() {
-      _isLoadingLocation = true;
-      _locationError = null;
-    });
-
-    try {
-      final serviceEnabled = await Geolocator.isLocationServiceEnabled();
-      if (!serviceEnabled) {
-        throw 'Location services are disabled.';
-      }
-
-      var permission = await Geolocator.checkPermission();
-      if (permission == LocationPermission.denied) {
-        permission = await Geolocator.requestPermission();
-      }
-      if (permission == LocationPermission.denied) {
-        throw 'Location permission denied.';
-      }
-      if (permission == LocationPermission.deniedForever) {
-        throw 'Location permission permanently denied.';
-      }
-
-      final position = await Geolocator.getCurrentPosition(
-        desiredAccuracy: LocationAccuracy.high,
-      );
-
-      if (!position.latitude.isFinite || !position.longitude.isFinite) {
-        throw 'Invalid location received.';
-      }
-
-      _latitude = position.latitude;
-      _longitude = position.longitude;
-      _calculatePrayerTimes();
-      _setPrayerTimeFromName();
-    } catch (e) {
-      _locationError = e.toString();
-      _prayerTimes = null;
-    } finally {
-      if (!mounted) return;
-      setState(() => _isLoadingLocation = false);
-    }
-  }
-
-  void _calculatePrayerTimes() {
-    if (_latitude == null || _longitude == null) {
-      _prayerTimes = null;
-      return;
-    }
-
-    final coordinates = adhan.Coordinates(_latitude!, _longitude!);
-    final params = adhan.CalculationMethod.muslim_world_league.getParameters();
-    params.madhab = adhan.Madhab.shafi;
-
-    final now = DateTime.now();
-    final dateComponents = adhan.DateComponents(now.year, now.month, now.day);
-    _prayerTimes = adhan.PrayerTimes(coordinates, dateComponents, params);
-  }
-
-  void _setPrayerTimeFromName() {
-    if (_prayerTimes == null) return;
-    DateTime? prayerTime;
-    final name = _titleController.text.toLowerCase();
-    switch (name) {
-      case 'fajr':
-        prayerTime = _prayerTimes!.fajr;
-      case 'dhuhr':
-        prayerTime = _prayerTimes!.dhuhr;
-      case 'asr':
-        prayerTime = _prayerTimes!.asr;
-      case 'maghrib':
-        prayerTime = _prayerTimes!.maghrib;
-      case 'isha':
-        prayerTime = _prayerTimes!.isha;
-    }
-
-    if (prayerTime == null) return;
-    setState(() {
-      _startTime = TimeOfDay.fromDateTime(prayerTime!);
-    });
-  }
-
-  void _saveHabit() {
-    if (_titleController.text.isEmpty) return;
-
-    final now = DateTime.now();
-    final startTime = DateTime(
-      now.year,
-      now.month,
-      now.day,
-      _startTime.hour,
-      _startTime.minute,
+  Widget _buildTimeWindowSection(
+    BuildContext context,
+    AddEditHabitState state,
+  ) {
+    final start = TimeOfDay(
+      hour: state.windowStartMinutes ~/ 60,
+      minute: state.windowStartMinutes % 60,
+    );
+    final end = TimeOfDay(
+      hour: state.windowEndMinutes ~/ 60,
+      minute: state.windowEndMinutes % 60,
     );
 
-    if (widget.habit != null) {
-      widget.habit!.title = _titleController.text;
-      widget.habit!.description = _descriptionController.text;
-      widget.habit!.startTime = startTime;
-      widget.habit!.habitType = _habitType;
-      context.read<HabitBloc>().add(UpdateHabitEvent(widget.habit!));
-
-      // Update notification
-      NotificationService().scheduleDailyHabitNotification(
-        id: widget.habit!.id.hashCode,
-        title: _habitType == 'prayer'
-            ? 'Prayer Time: ${widget.habit!.title}'
-            : 'Habit Reminder: ${widget.habit!.title}',
-        body: _habitType == 'prayer'
-            ? 'It\'s time for ${widget.habit!.title}'
-            : 'Time to complete your habit!',
-        time: _startTime,
-      );
-    } else {
-      final newHabit = Habit(
-        id: const Uuid().v4(),
-        title: _titleController.text,
-        description: _descriptionController.text,
-        startTime: startTime,
-        category: _habitType == 'prayer' ? 'Prayer' : 'General',
-        habitType: _habitType,
-      );
-      context.read<HabitBloc>().add(AddHabitEvent(newHabit));
-
-      // Schedule notification
-      NotificationService().scheduleDailyHabitNotification(
-        id: newHabit.id.hashCode,
-        title: _habitType == 'prayer'
-            ? 'Prayer Time: ${newHabit.title}'
-            : 'Habit Reminder: ${newHabit.title}',
-        body: _habitType == 'prayer'
-            ? 'It\'s time for ${newHabit.title}'
-            : 'Time to complete your habit!',
-        time: _startTime,
-      );
-    }
-
-    Navigator.pop(context);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          "Time Window",
+          style: AppTextStyles.bodyLarge.copyWith(fontWeight: FontWeight.bold),
+        ),
+        const SizedBox(height: 8),
+        Row(
+          children: [
+            Expanded(
+              child: GestureDetector(
+                onTap: () async {
+                  final picked = await showTimePicker(
+                    context: context,
+                    initialTime: start,
+                  );
+                  if (!context.mounted) return;
+                  if (picked != null) {
+                    context.read<AddEditHabitBloc>().add(
+                      UpdateHabitFieldsEvent(
+                        windowStartMinutes: picked.hour * 60 + picked.minute,
+                      ),
+                    );
+                  }
+                },
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 12,
+                  ),
+                  decoration: BoxDecoration(
+                    color: AppColors.surface,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: Colors.grey.withValues(alpha: 0.3),
+                    ),
+                  ),
+                  child: Text(
+                    "Start: ${start.format(context)}",
+                    style: AppTextStyles.bodyMedium,
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: GestureDetector(
+                onTap: () async {
+                  final picked = await showTimePicker(
+                    context: context,
+                    initialTime: end,
+                  );
+                  if (!context.mounted) return;
+                  if (picked != null) {
+                    context.read<AddEditHabitBloc>().add(
+                      UpdateHabitFieldsEvent(
+                        windowEndMinutes: picked.hour * 60 + picked.minute,
+                      ),
+                    );
+                  }
+                },
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 12,
+                  ),
+                  decoration: BoxDecoration(
+                    color: AppColors.surface,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: Colors.grey.withValues(alpha: 0.3),
+                    ),
+                  ),
+                  child: Text(
+                    "End: ${end.format(context)}",
+                    style: AppTextStyles.bodyMedium,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
   }
 }

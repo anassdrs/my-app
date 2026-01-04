@@ -5,16 +5,16 @@ import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:path_provider/path_provider.dart';
-import 'package:provider/provider.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../../blocs/habit_bloc.dart';
 import '../../blocs/prayer_bloc.dart';
 import '../../blocs/todo_bloc.dart';
+import '../../blocs/profile_bloc.dart';
 import '../../providers/auth_provider.dart';
-import '../../providers/theme_provider.dart';
 import '../../services/backup_service.dart';
 import '../../utils/constants.dart';
+import '../../widgets/primary_button.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -33,10 +33,10 @@ class _ProfileScreenState extends State<ProfileScreen>
   final List<Color> _accentOptions = [
     AppColors.primary,
     AppColors.secondary,
-    Color(0xFF2563EB),
-    Color(0xFF16A34A),
-    Color(0xFFF97316),
-    Color(0xFF0F172A),
+    const Color(0xFF2563EB),
+    const Color(0xFF16A34A),
+    const Color(0xFFF97316),
+    const Color(0xFF0F172A),
   ];
 
   late final TextEditingController _nameController;
@@ -44,23 +44,18 @@ class _ProfileScreenState extends State<ProfileScreen>
   late final AnimationController _introController;
   late final Animation<double> _fadeAnimation;
   late final Animation<Offset> _slideAnimation;
-  int? _selectedColorValue;
-  bool _isDirty = false;
 
   @override
   void initState() {
     super.initState();
-    final authProvider = context.read<AuthProvider>();
-    _nameController = TextEditingController(
-      text: authProvider.currentUser?.username ??
-          authProvider.currentUserEmail ??
-          'User',
-    );
-    _bioController = TextEditingController(text: authProvider.profileBio);
-    _selectedColorValue = authProvider.accentColorValue;
+    final bloc = context.read<ProfileBloc>();
+    bloc.add(LoadProfileEvent());
 
-    _nameController.addListener(_markDirty);
-    _bioController.addListener(_markDirty);
+    _nameController = TextEditingController(text: bloc.state.username);
+    _bioController = TextEditingController(text: bloc.state.bio);
+
+    _nameController.addListener(_onFieldsChanged);
+    _bioController.addListener(_onFieldsChanged);
 
     _introController = AnimationController(
       vsync: this,
@@ -70,195 +65,172 @@ class _ProfileScreenState extends State<ProfileScreen>
       parent: _introController,
       curve: Curves.easeOutCubic,
     );
-    _slideAnimation = Tween<Offset>(
-      begin: const Offset(0, 0.08),
-      end: Offset.zero,
-    ).animate(
-      CurvedAnimation(parent: _introController, curve: Curves.easeOutCubic),
-    );
+    _slideAnimation =
+        Tween<Offset>(begin: const Offset(0, 0.08), end: Offset.zero).animate(
+          CurvedAnimation(parent: _introController, curve: Curves.easeOutCubic),
+        );
     _introController.forward();
   }
 
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    final authProvider = context.watch<AuthProvider>();
-    if (_isDirty) return;
-
-    final name = authProvider.currentUser?.username ??
-        authProvider.currentUserEmail ??
-        'User';
-    if (_nameController.text != name) {
-      _nameController.text = name;
-    }
-
-    if (_bioController.text != authProvider.profileBio) {
-      _bioController.text = authProvider.profileBio;
-    }
-
-    _selectedColorValue ??= authProvider.accentColorValue;
+  void _onFieldsChanged() {
+    context.read<ProfileBloc>().add(
+      UpdateProfileFieldEvent(
+        username: _nameController.text,
+        bio: _bioController.text,
+        accentColorValue: context.read<ProfileBloc>().state.accentColorValue,
+      ),
+    );
   }
 
   @override
   void dispose() {
-    _nameController
-      ..removeListener(_markDirty)
-      ..dispose();
-    _bioController
-      ..removeListener(_markDirty)
-      ..dispose();
+    _nameController.dispose();
+    _bioController.dispose();
     _introController.dispose();
     super.dispose();
   }
 
-  void _markDirty() {
-    if (_isDirty) {
-      setState(() {});
-      return;
-    }
-    setState(() => _isDirty = true);
-  }
-
-  Color _resolveAccentColor(BuildContext context, AuthProvider authProvider) {
-    final fallback = Theme.of(context).colorScheme.primary;
-    final value = _selectedColorValue ?? authProvider.accentColorValue;
-    return value == null ? fallback : Color(value);
-  }
-
   @override
   Widget build(BuildContext context) {
-    final authProvider = context.watch<AuthProvider>();
-    final themeProvider = context.watch<ThemeProvider>();
-    final accentColor = _resolveAccentColor(context, authProvider);
-    final email = authProvider.currentUserEmail ?? 'user@example.com';
-    final level = authProvider.currentUser?.level ?? 1;
-    final xp = authProvider.currentUser?.xp ?? 0;
+    return BlocListener<ProfileBloc, ProfileState>(
+      listener: (context, state) {
+        if (state.error != null) {
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(SnackBar(content: Text(state.error!)));
+        }
+        if (state.success) {
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(const SnackBar(content: Text('Profile updated.')));
+        }
+      },
+      child: BlocBuilder<ProfileBloc, ProfileState>(
+        builder: (context, state) {
+          final accentColor = state.accentColorValue != null
+              ? Color(state.accentColorValue!)
+              : Theme.of(context).colorScheme.primary;
 
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(
-          "Profile",
-          style: AppTextStyles.heading2.copyWith(
-            color: Theme.of(context).colorScheme.onSurface,
-          ),
-        ),
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        leading: IconButton(
-          icon: Icon(
-            Icons.arrow_back,
-            color: Theme.of(context).colorScheme.onSurface,
-          ),
-          onPressed: () => Navigator.pop(context),
-        ),
-      ),
-      body: SafeArea(
-        child: FadeTransition(
-          opacity: _fadeAnimation,
-          child: SlideTransition(
-            position: _slideAnimation,
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.fromLTRB(24, 8, 24, 24),
-              child: Column(
-                children: [
-                  _buildHeader(context, accentColor, email, level, xp),
-                  const SizedBox(height: 24),
-                  _buildProfileCard(context, accentColor),
-                  const SizedBox(height: 24),
-                  _buildThemeToggle(context, themeProvider),
-                  const SizedBox(height: 10),
-                  _buildOptionTile(
-                    context,
-                    icon: Icons.settings,
-                    title: "Settings",
-                    onTap: () {},
-                  ),
-                  _buildOptionTile(
-                    context,
-                    icon: Icons.notifications,
-                    title: "Notifications",
-                    onTap: () {},
-                  ),
-                  _buildOptionTile(
-                    context,
-                    icon: Icons.backup,
-                    title: "Export Backup",
-                    onTap: () => _exportBackup(context),
-                  ),
-                  _buildOptionTile(
-                    context,
-                    icon: Icons.restore,
-                    title: "Import Backup",
-                    onTap: () => _importBackup(context),
-                  ),
-                  const SizedBox(height: 20),
-                  SizedBox(
-                    width: double.infinity,
-                    height: 50,
-                    child: ElevatedButton(
-                      onPressed: _isDirty
-                          ? () => _saveProfile(context, accentColor)
-                          : null,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: accentColor,
-                        foregroundColor: Colors.white,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(16),
-                        ),
-                      ),
-                      child: const Text(
-                        "Save Changes",
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  SizedBox(
-                    width: double.infinity,
-                    height: 50,
-                    child: ElevatedButton(
-                      onPressed: () {
-                        authProvider.logout();
-                        Navigator.pop(context);
-                      },
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: AppColors.error,
-                        foregroundColor: Colors.white,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(16),
-                        ),
-                      ),
-                      child: const Text(
-                        "Log Out",
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
+          final authProvider = context.read<AuthProvider>();
+          final email = authProvider.currentUserEmail ?? 'user@example.com';
+          final level = authProvider.currentUser?.level ?? 1;
+          final xp = authProvider.currentUser?.xp ?? 0;
+
+          return Scaffold(
+            appBar: AppBar(
+              title: Text(
+                "Profile",
+                style: AppTextStyles.heading2.copyWith(
+                  color: Theme.of(context).colorScheme.onSurface,
+                ),
+              ),
+              backgroundColor: Colors.transparent,
+              elevation: 0,
+              leading: IconButton(
+                icon: Icon(
+                  Icons.arrow_back,
+                  color: Theme.of(context).colorScheme.onSurface,
+                ),
+                onPressed: () => Navigator.pop(context),
               ),
             ),
-          ),
-        ),
+            body: SafeArea(
+              child: FadeTransition(
+                opacity: _fadeAnimation,
+                child: SlideTransition(
+                  position: _slideAnimation,
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.fromLTRB(24, 8, 24, 24),
+                    child: Column(
+                      children: [
+                        _buildHeader(
+                          context,
+                          state,
+                          accentColor,
+                          email,
+                          level,
+                          xp,
+                        ),
+                        const SizedBox(height: 24),
+                        _buildProfileCard(context, state, accentColor),
+                        const SizedBox(height: 24),
+                        _buildThemeToggle(context, state),
+                        const SizedBox(height: 10),
+                        _buildOptionTile(
+                          context,
+                          icon: Icons.settings,
+                          title: "Settings",
+                          onTap: () {},
+                        ),
+                        _buildOptionTile(
+                          context,
+                          icon: Icons.notifications,
+                          title: "Notifications",
+                          onTap: () {},
+                        ),
+                        _buildOptionTile(
+                          context,
+                          icon: Icons.backup,
+                          title: "Export Backup",
+                          onTap: () => _exportBackup(context),
+                        ),
+                        _buildOptionTile(
+                          context,
+                          icon: Icons.restore,
+                          title: "Import Backup",
+                          onTap: () => _importBackup(context),
+                        ),
+                        const SizedBox(height: 20),
+                        SizedBox(
+                          width: double.infinity,
+                          height: 50,
+                          child: PrimaryButton(
+                            label: "Save Changes",
+                            onPressed: state.isDirty && !state.isLoading
+                                ? () => context.read<ProfileBloc>().add(
+                                    SaveProfileEvent(),
+                                  )
+                                : null,
+                            backgroundColor: accentColor,
+                            isLoading: state.isLoading,
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        SizedBox(
+                          width: double.infinity,
+                          height: 50,
+                          child: PrimaryButton(
+                            label: "Log Out",
+                            onPressed: () {
+                              context.read<ProfileBloc>().add(LogoutEvent());
+                              Navigator.pop(context);
+                            },
+                            backgroundColor: AppColors.error,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          );
+        },
       ),
     );
   }
 
   Widget _buildHeader(
     BuildContext context,
+    ProfileState state,
     Color accentColor,
     String email,
     int level,
     int xp,
   ) {
-    final displayName = _nameController.text.trim().isEmpty
+    final displayName = state.username.trim().isEmpty
         ? 'User'
-        : _nameController.text.trim();
+        : state.username.trim();
 
     return AnimatedContainer(
       duration: const Duration(milliseconds: 300),
@@ -267,16 +239,16 @@ class _ProfileScreenState extends State<ProfileScreen>
         borderRadius: BorderRadius.circular(24),
         gradient: LinearGradient(
           colors: [
-            accentColor.withOpacity(0.9),
-            accentColor.withOpacity(0.55),
-            Theme.of(context).colorScheme.secondary.withOpacity(0.35),
+            accentColor.withValues(alpha: 0.9),
+            accentColor.withValues(alpha: 0.55),
+            Theme.of(context).colorScheme.secondary.withValues(alpha: 0.35),
           ],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
         boxShadow: [
           BoxShadow(
-            color: accentColor.withOpacity(0.25),
+            color: accentColor.withValues(alpha: 0.25),
             blurRadius: 18,
             offset: const Offset(0, 12),
           ),
@@ -289,7 +261,7 @@ class _ProfileScreenState extends State<ProfileScreen>
             top: -50,
             child: CircleAvatar(
               radius: 60,
-              backgroundColor: Colors.white.withOpacity(0.08),
+              backgroundColor: Colors.white.withValues(alpha: 0.08),
             ),
           ),
           Positioned(
@@ -297,28 +269,24 @@ class _ProfileScreenState extends State<ProfileScreen>
             bottom: -30,
             child: CircleAvatar(
               radius: 50,
-              backgroundColor: Colors.white.withOpacity(0.08),
+              backgroundColor: Colors.white.withValues(alpha: 0.08),
             ),
           ),
           Column(
             children: [
               Row(
                 children: [
-                  AnimatedSwitcher(
-                    duration: const Duration(milliseconds: 250),
+                  CircleAvatar(
+                    radius: 38,
+                    backgroundColor: Colors.white.withValues(alpha: 0.2),
                     child: CircleAvatar(
-                      key: ValueKey(accentColor.value),
-                      radius: 38,
-                      backgroundColor: Colors.white.withOpacity(0.2),
-                      child: CircleAvatar(
-                        radius: 32,
-                        backgroundColor: Colors.white,
-                        child: Text(
-                          displayName.substring(0, 1).toUpperCase(),
-                          style: AppTextStyles.heading1.copyWith(
-                            color: accentColor,
-                            fontSize: 26,
-                          ),
+                      radius: 32,
+                      backgroundColor: Colors.white,
+                      child: Text(
+                        displayName.substring(0, 1).toUpperCase(),
+                        style: AppTextStyles.heading1.copyWith(
+                          color: accentColor,
+                          fontSize: 26,
                         ),
                       ),
                     ),
@@ -338,7 +306,7 @@ class _ProfileScreenState extends State<ProfileScreen>
                         Text(
                           email,
                           style: AppTextStyles.bodyMedium.copyWith(
-                            color: Colors.white.withOpacity(0.8),
+                            color: Colors.white.withValues(alpha: 0.8),
                           ),
                         ),
                       ],
@@ -355,7 +323,7 @@ class _ProfileScreenState extends State<ProfileScreen>
                   const Spacer(),
                   Icon(
                     Icons.auto_awesome,
-                    color: Colors.white.withOpacity(0.8),
+                    color: Colors.white.withValues(alpha: 0.8),
                   ),
                 ],
               ),
@@ -370,7 +338,7 @@ class _ProfileScreenState extends State<ProfileScreen>
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.18),
+        color: Colors.white.withValues(alpha: 0.18),
         borderRadius: BorderRadius.circular(20),
       ),
       child: Row(
@@ -378,7 +346,7 @@ class _ProfileScreenState extends State<ProfileScreen>
           Text(
             label,
             style: AppTextStyles.bodyMedium.copyWith(
-              color: Colors.white.withOpacity(0.85),
+              color: Colors.white.withValues(alpha: 0.85),
               fontWeight: FontWeight.w600,
             ),
           ),
@@ -395,8 +363,11 @@ class _ProfileScreenState extends State<ProfileScreen>
     );
   }
 
-  Widget _buildProfileCard(BuildContext context, Color accentColor) {
-    final selectedValue = _selectedColorValue ?? accentColor.value;
+  Widget _buildProfileCard(
+    BuildContext context,
+    ProfileState state,
+    Color accentColor,
+  ) {
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
@@ -404,7 +375,7 @@ class _ProfileScreenState extends State<ProfileScreen>
         borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.06),
+            color: Colors.black.withValues(alpha: 0.06),
             blurRadius: 12,
             offset: const Offset(0, 8),
           ),
@@ -435,13 +406,7 @@ class _ProfileScreenState extends State<ProfileScreen>
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(14),
                 borderSide: BorderSide(
-                  color: Theme.of(context).dividerColor.withOpacity(0.2),
-                ),
-              ),
-              enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(14),
-                borderSide: BorderSide(
-                  color: Theme.of(context).dividerColor.withOpacity(0.2),
+                  color: Theme.of(context).dividerColor.withValues(alpha: 0.2),
                 ),
               ),
             ),
@@ -457,13 +422,7 @@ class _ProfileScreenState extends State<ProfileScreen>
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(14),
                 borderSide: BorderSide(
-                  color: Theme.of(context).dividerColor.withOpacity(0.2),
-                ),
-              ),
-              enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(14),
-                borderSide: BorderSide(
-                  color: Theme.of(context).dividerColor.withOpacity(0.2),
+                  color: Theme.of(context).dividerColor.withValues(alpha: 0.2),
                 ),
               ),
             ),
@@ -481,13 +440,16 @@ class _ProfileScreenState extends State<ProfileScreen>
             spacing: 12,
             runSpacing: 12,
             children: _accentOptions.map((color) {
-              final isSelected = selectedValue == color.value;
+              final isSelected = state.accentColorValue == color.toARGB32();
               return GestureDetector(
                 onTap: () {
-                  setState(() {
-                    _selectedColorValue = color.value;
-                    _isDirty = true;
-                  });
+                  context.read<ProfileBloc>().add(
+                    UpdateProfileFieldEvent(
+                      username: _nameController.text,
+                      bio: _bioController.text,
+                      accentColorValue: color.toARGB32(),
+                    ),
+                  );
                 },
                 child: AnimatedScale(
                   scale: isSelected ? 1.05 : 1.0,
@@ -500,15 +462,13 @@ class _ProfileScreenState extends State<ProfileScreen>
                       color: color,
                       shape: BoxShape.circle,
                       border: Border.all(
-                        color: isSelected
-                            ? Colors.white
-                            : Colors.transparent,
+                        color: isSelected ? Colors.white : Colors.transparent,
                         width: 3,
                       ),
                       boxShadow: [
                         if (isSelected)
                           BoxShadow(
-                            color: color.withOpacity(0.4),
+                            color: color.withValues(alpha: 0.4),
                             blurRadius: 12,
                           ),
                       ],
@@ -526,7 +486,7 @@ class _ProfileScreenState extends State<ProfileScreen>
     );
   }
 
-  Widget _buildThemeToggle(BuildContext context, ThemeProvider themeProvider) {
+  Widget _buildThemeToggle(BuildContext context, ProfileState state) {
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
       decoration: BoxDecoration(
@@ -534,7 +494,7 @@ class _ProfileScreenState extends State<ProfileScreen>
         borderRadius: BorderRadius.circular(15),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
+            color: Colors.black.withValues(alpha: 0.05),
             blurRadius: 10,
             offset: const Offset(0, 5),
           ),
@@ -544,11 +504,11 @@ class _ProfileScreenState extends State<ProfileScreen>
         leading: Container(
           padding: const EdgeInsets.all(8),
           decoration: BoxDecoration(
-            color: Theme.of(context).primaryColor.withOpacity(0.1),
+            color: Theme.of(context).primaryColor.withValues(alpha: 0.1),
             borderRadius: BorderRadius.circular(10),
           ),
           child: Icon(
-            themeProvider.isDarkMode ? Icons.dark_mode : Icons.light_mode,
+            state.isDarkMode ? Icons.dark_mode : Icons.light_mode,
             color: Theme.of(context).primaryColor,
           ),
         ),
@@ -559,8 +519,9 @@ class _ProfileScreenState extends State<ProfileScreen>
           ),
         ),
         trailing: Switch(
-          value: themeProvider.isDarkMode,
-          onChanged: (value) => themeProvider.toggleTheme(),
+          value: state.isDarkMode,
+          onChanged: (value) =>
+              context.read<ProfileBloc>().add(ToggleThemeEvent()),
           activeThumbColor: Theme.of(context).primaryColor,
         ),
       ),
@@ -577,7 +538,7 @@ class _ProfileScreenState extends State<ProfileScreen>
       leading: Container(
         padding: const EdgeInsets.all(8),
         decoration: BoxDecoration(
-          color: Theme.of(context).colorScheme.primary.withOpacity(0.1),
+          color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.1),
           borderRadius: BorderRadius.circular(10),
         ),
         child: Icon(icon, color: Theme.of(context).colorScheme.primary),
@@ -590,24 +551,9 @@ class _ProfileScreenState extends State<ProfileScreen>
       ),
       trailing: Icon(
         Icons.chevron_right,
-        color: Theme.of(context).colorScheme.onSurface.withOpacity(0.5),
+        color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.5),
       ),
       onTap: onTap,
-    );
-  }
-
-  Future<void> _saveProfile(BuildContext context, Color accentColor) async {
-    final authProvider = context.read<AuthProvider>();
-    await authProvider.updateProfile(
-      username: _nameController.text,
-      bio: _bioController.text,
-      accentColorValue: _selectedColorValue ?? accentColor.value,
-    );
-
-    if (!mounted) return;
-    setState(() => _isDirty = false);
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Profile updated.')),
     );
   }
 
@@ -615,7 +561,7 @@ class _ProfileScreenState extends State<ProfileScreen>
     final backupService = BackupService();
     try {
       final backupJson = await backupService.createBackupJson();
-      final fileName = 'todo_habit_backup.json';
+      const fileName = 'todo_habit_backup.json';
       String? savedPath;
 
       try {
@@ -637,10 +583,9 @@ class _ProfileScreenState extends State<ProfileScreen>
         final filePath = '${tempDir.path}/$fileName';
         final file = File(filePath);
         await file.writeAsString(backupJson);
-        await Share.shareXFiles(
-          [XFile(filePath, mimeType: 'application/json', name: fileName)],
-          text: 'Todo & Habit backup',
-        );
+        await Share.shareXFiles([
+          XFile(filePath, mimeType: 'application/json', name: fileName),
+        ], text: 'Todo & Habit backup');
       }
 
       if (!context.mounted) return;
@@ -655,9 +600,9 @@ class _ProfileScreenState extends State<ProfileScreen>
       );
     } catch (e) {
       if (!context.mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Backup export failed: $e')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Backup export failed: $e')));
     }
   }
 
@@ -667,9 +612,7 @@ class _ProfileScreenState extends State<ProfileScreen>
       builder: (dialogContext) {
         return AlertDialog(
           title: const Text('Restore backup?'),
-          content: const Text(
-            'This will replace all current data in the app.',
-          ),
+          content: const Text('This will replace all current data in the app.'),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(dialogContext, false),
@@ -698,7 +641,7 @@ class _ProfileScreenState extends State<ProfileScreen>
       context.read<TodoBloc>().add(LoadTodos());
       context.read<HabitBloc>().add(LoadHabits());
       context.read<PrayerBloc>().add(LoadPrayers());
-      await Provider.of<AuthProvider>(context, listen: false).init();
+      await context.read<AuthProvider>().init();
 
       if (!context.mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -706,9 +649,9 @@ class _ProfileScreenState extends State<ProfileScreen>
       );
     } catch (e) {
       if (!context.mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Backup restore failed: $e')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Backup restore failed: $e')));
     }
   }
 }

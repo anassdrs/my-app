@@ -1,0 +1,62 @@
+{
+  "verses": [
+    {
+      "arabic": "أَلَا بِذِكْرِ اللَّهِ تَطْمَئِنُّ الْقُلُوبُ",
+      "en": "Surely in the remembrance of Allah do hearts find rest.",
+      "fr": "C'est par le rappel d'Allah que les cœurs se tranquillisent.",
+      "source": "Qur'an 13:28"
+    },
+    {
+      "arabic": "فَإِنَّ مَعَ الْعُسْرِ يُسْرًا",
+      "en": "With hardship comes ease.",
+      "fr": "Avec la difficulté vient la facilité.",
+      "source": "Qur'an 94:5"
+    },
+    {
+      "arabic": "وَمَن يَتَّقِ اللَّهَ يَجْعَل لَّهُ مَخْرَجًا",
+      "en": "Whoever is mindful of Allah, He will make a way out for them.",
+      "fr": "Quiconque craint Allah, Il lui donnera une issue favorable.",
+      "source": "Qur'an 65:2"
+    }
+  ],
+  "hadiths": [
+    {
+      "arabic": "إِنَّمَا الأَعْمَالُ بِالنِّيَّاتِ",
+      "en": "Actions are only by intentions.",
+      "fr": "Les actions ne valent que par les intentions.",
+      "source": "Bukhari & مسلم"
+    },
+    {
+      "arabic": "أَحَبُّ الأَعْمَالِ إِلَى اللَّهِ أَدْوَمُهَا وَإِنْ قَلَّ",
+      "en": "The deeds most loved by Allah are those done regularly, even if small.",
+      "fr": "Les œuvres les plus aimées d’Allah sont celles qui sont constantes, même si elles sont minimes.",
+      "source": "Bukhari & Muslim"
+    },
+    {
+      "arabic": "مَنْ صَمَتَ نَجَا",
+      "en": "Whoever remains silent is saved.",
+      "fr": "Celui qui se tait est sauvé.",
+      "source": "Tirmidhi"
+    }
+  ],
+  "values": [
+    {
+      "arabic": "الصبر مفتاح الفرج",
+      "en": "Patience is the key to relief.",
+      "fr": "La patience est la clé du soulagement.",
+      "source": "Sabr"
+    },
+    {
+      "arabic": "التوكل على الله قوة",
+      "en": "Trust in Allah is strength.",
+      "fr": "La confiance en Allah est une force.",
+      "source": "Tawakkul"
+    },
+    {
+      "arabic": "الشكر يزيد النعم",
+      "en": "Gratitude increases blessings.",
+      "fr": "La gratitude augmente les bienfaits.",
+      "source": "Shukr"
+    }
+  ]
+}

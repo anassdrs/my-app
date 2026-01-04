@@ -1,15 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
-import 'package:provider/provider.dart';
 import '../../blocs/habit_bloc.dart';
 import '../../models/habit.dart';
 import '../../utils/constants.dart';
+import '../../widgets/tracked_item_card.dart';
 import '../add_edit_habit_screen/add_edit_habit_screen.dart';
 import '../habit_detail_screen/habit_detail_screen.dart';
 import '../profile_screen/profile_screen.dart';
-import '../../providers/auth_provider.dart';
-import '../habit_stats_screen.dart';
+import '../habit_stats_screen/habit_stats_screen.dart';
 
 class HabitView extends StatelessWidget {
   const HabitView({super.key});
@@ -216,7 +215,7 @@ class HabitView extends StatelessWidget {
               final template = _templates[index];
               return _buildTemplateCard(context, template);
             },
-            separatorBuilder: (_, __) => const SizedBox(width: 12),
+            separatorBuilder: (context, index) => const SizedBox(width: 12),
             itemCount: _templates.length,
           ),
         ),
@@ -243,15 +242,15 @@ class HabitView extends StatelessWidget {
         height: MediaQuery.of(context).size.height * 0.2,
         padding: const EdgeInsets.all(7),
         decoration: BoxDecoration(
-          color: template.color.withOpacity(0.15),
+          color: template.color.withValues(alpha: 0.15),
           borderRadius: BorderRadius.circular(18),
-          border: Border.all(color: template.color.withOpacity(0.4)),
+          border: Border.all(color: template.color.withValues(alpha: 0.4)),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             CircleAvatar(
-              backgroundColor: template.color.withOpacity(0.2),
+              backgroundColor: template.color.withValues(alpha: 0.2),
               child: Icon(template.icon, color: template.color),
             ),
             const SizedBox(height: 10),
@@ -267,7 +266,9 @@ class HabitView extends StatelessWidget {
             Text(
               template.description,
               style: AppTextStyles.bodyMedium.copyWith(
-                color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
+                color: Theme.of(
+                  context,
+                ).colorScheme.onSurface.withValues(alpha: 0.6),
               ),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
@@ -281,154 +282,88 @@ class HabitView extends StatelessWidget {
   Widget _buildHabitCard(BuildContext context, Habit habit) {
     final isCompletedToday = habit.isCompletedOn(DateTime.now());
 
-    return Container(
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(20),
-        border: isCompletedToday
-            ? Border.all(color: AppColors.secondary, width: 2)
-            : null,
-      ),
-      padding: const EdgeInsets.all(12),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Row(
-                children: [
-                  Icon(
-                    habit.habitType == 'prayer'
-                        ? Icons.mosque
-                        : FontAwesomeIcons.fire,
-                    color: isCompletedToday
-                        ? (habit.habitType == 'prayer'
-                              ? AppColors.secondary
-                              : Colors.orange)
-                        : Colors.grey,
-                    size: 16,
-                  ),
-                  const SizedBox(width: 4),
-                  Text(
-                    "${habit.streak}",
-                    style: TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 14,
-                      color: isCompletedToday
-                          ? (habit.habitType == 'prayer'
-                                ? AppColors.secondary
-                                : Colors.orange)
-                          : Colors.grey,
-                    ),
-                  ),
-                ],
-              ),
-              Row(
-                children: [
-                  const Icon(Icons.access_time, size: 14, color: Colors.grey),
-                  const SizedBox(width: 4),
-                  Text(
-                    TimeOfDay.fromDateTime(habit.startTime).format(context),
-                    style: const TextStyle(
-                      fontWeight: FontWeight.bold,
-                      color: Colors.grey,
-                      fontSize: 11,
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  GestureDetector(
-                    onTap: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => HabitStatsScreen(habit: habit),
-                        ),
-                      );
-                    },
-                    child: Icon(
-                      Icons.bar_chart,
-                      size: 16,
-                      color: AppColors.secondary,
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
-          const Spacer(),
-          GestureDetector(
-            onTap: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => HabitDetailScreen(habit: habit),
-                ),
-              );
-            },
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  habit.title,
-                  style: AppTextStyles.heading2.copyWith(fontSize: 18),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                if (habit.description.isNotEmpty) ...[
-                  const SizedBox(height: 5),
-                  Text(
-                    habit.description,
-                    style: AppTextStyles.bodyMedium.copyWith(
-                      color: Colors.grey,
-                      fontSize: 12,
-                    ),
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ],
-              ],
-            ),
-          ),
-          const SizedBox(height: 10),
-          GestureDetector(
-            onTap: () {
-              final isCompleting = !habit.isCompletedOn(DateTime.now());
-              context.read<HabitBloc>().add(
-                ToggleHabitEvent(habit, DateTime.now()),
-              );
+    final streakColor = habit.habitType == 'prayer'
+        ? AppColors.secondary
+        : Colors.orange;
 
-              if (isCompleting) {
-                final auth = Provider.of<AuthProvider>(context, listen: false);
-                auth.addExperience(10);
-
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text("Habit Completed! +10 XP"),
-                    duration: const Duration(seconds: 1),
-                    backgroundColor: Theme.of(context).colorScheme.secondary,
+    return TrackedItemCard(
+      isCompleted: isCompletedToday,
+      streak: habit.streak,
+      streakIcon: habit.habitType == 'prayer'
+          ? Icons.mosque
+          : FontAwesomeIcons.fire,
+      streakColor: streakColor,
+      title: habit.title,
+      description: habit.description,
+      infoLines: const [],
+      topRightWidgets: [
+        const Icon(Icons.access_time, size: 14, color: Colors.grey),
+        const SizedBox(width: 4),
+        Text(
+          TimeOfDay.fromDateTime(habit.startTime).format(context),
+          style: const TextStyle(
+            fontWeight: FontWeight.bold,
+            color: Colors.grey,
+            fontSize: 11,
+          ),
+        ),
+        const SizedBox(width: 8),
+        GestureDetector(
+          onTap: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => HabitStatsScreen(habit: habit)),
+            );
+          },
+          child: Icon(Icons.bar_chart, size: 16, color: AppColors.secondary),
+        ),
+        const SizedBox(width: 4),
+        PopupMenuButton<_HabitMenuAction>(
+          icon: const Icon(Icons.more_vert, size: 16, color: Colors.grey),
+          onSelected: (action) {
+            switch (action) {
+              case _HabitMenuAction.edit:
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => AddEditHabitScreen(habit: habit),
                   ),
                 );
-              }
-            },
-            child: Container(
-              width: double.infinity,
-              padding: const EdgeInsets.symmetric(vertical: 8),
-              decoration: BoxDecoration(
-                color: isCompletedToday
-                    ? AppColors.secondary
-                    : Colors.grey.withOpacity(0.2),
-                borderRadius: BorderRadius.circular(10),
-              ),
-              alignment: Alignment.center,
-              child: Icon(
-                isCompletedToday ? Icons.check : Icons.circle_outlined,
-                color: Colors.white,
-              ),
+              case _HabitMenuAction.delete:
+                context.read<HabitBloc>().add(DeleteHabitEvent(habit));
+            }
+          },
+          itemBuilder: (context) => const [
+            PopupMenuItem(value: _HabitMenuAction.edit, child: Text('Edit')),
+            PopupMenuItem(
+              value: _HabitMenuAction.delete,
+              child: Text('Delete'),
             ),
-          ),
-        ],
-      ),
+          ],
+        ),
+      ],
+      onTapTitle: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => HabitDetailScreen(habit: habit)),
+        );
+      },
+      onToggle: () {
+        final isCompleting = !habit.isCompletedOn(DateTime.now());
+        context.read<HabitBloc>().add(ToggleHabitEvent(habit, DateTime.now()));
+
+        if (isCompleting) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text("Habit Completed!"),
+              duration: const Duration(seconds: 1),
+              backgroundColor: Theme.of(context).colorScheme.secondary,
+            ),
+          );
+        }
+      },
+      activeBorderColor: AppColors.secondary,
+      backgroundColor: AppColors.surface,
     );
   }
 }
@@ -448,3 +383,5 @@ class _HabitTemplate {
     this.habitType = 'general',
   });
 }
+
+enum _HabitMenuAction { edit, delete }

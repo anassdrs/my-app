@@ -25,13 +25,20 @@ class HabitAdapter extends TypeAdapter<Habit> {
       streak: fields[3] as int,
       category: fields[6] as String,
       habitType: fields[7] as String,
+      frequencyType: fields[8] as String? ?? 'daily',
+      frequencyValue: fields[9] as int? ?? 1,
+      customDays: (fields[10] as List?)?.cast<int>(),
+      windowStartMinutes: fields[11] as int?,
+      windowEndMinutes: fields[12] as int?,
+      evaluatedDates: (fields[13] as List?)?.cast<String>(),
+      lastEvaluatedDate: fields[14] as DateTime?,
     );
   }
 
   @override
   void write(BinaryWriter writer, Habit obj) {
     writer
-      ..writeByte(8)
+      ..writeByte(15)
       ..writeByte(0)
       ..write(obj.id)
       ..writeByte(1)
@@ -47,7 +54,21 @@ class HabitAdapter extends TypeAdapter<Habit> {
       ..writeByte(6)
       ..write(obj.category)
       ..writeByte(7)
-      ..write(obj.habitType);
+      ..write(obj.habitType)
+      ..writeByte(8)
+      ..write(obj.frequencyType)
+      ..writeByte(9)
+      ..write(obj.frequencyValue)
+      ..writeByte(10)
+      ..write(obj.customDays)
+      ..writeByte(11)
+      ..write(obj.windowStartMinutes)
+      ..writeByte(12)
+      ..write(obj.windowEndMinutes)
+      ..writeByte(13)
+      ..write(obj.evaluatedDates)
+      ..writeByte(14)
+      ..write(obj.lastEvaluatedDate);
   }
 
   @override

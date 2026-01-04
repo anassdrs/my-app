@@ -53,6 +53,10 @@ dependencies:
   share_plus: ^10.1.4
   geolocator: ^13.0.2
   flutter_compass: ^0.8.1
+  quran: ^1.2.7
+  flutter_svg: ^2.0.10
+  path_drawing: ^1.0.1
+  vector_math: ^2.1.4
 
 dev_dependencies:
   flutter_test:
@@ -100,6 +104,9 @@ flutter:
   uses-material-design: true
   assets:
     - assets/data/adhkar.json
+    - assets/data/daily_inspirations.json
+    - assets/heart.svg
+    - assets/heart_paths.json
 
   # To add assets to your application, add an assets section, like this:
   # assets:

@@ -76,6 +76,13 @@ class BackupService {
       'streak': habit.streak,
       'category': habit.category,
       'habitType': habit.habitType,
+      'frequencyType': habit.frequencyType,
+      'frequencyValue': habit.frequencyValue,
+      'customDays': habit.customDays,
+      'windowStartMinutes': habit.windowStartMinutes,
+      'windowEndMinutes': habit.windowEndMinutes,
+      'evaluatedDates': habit.evaluatedDates,
+      'lastEvaluatedDate': habit.lastEvaluatedDate?.toIso8601String(),
     };
   }
 
@@ -144,6 +151,19 @@ class BackupService {
         streak: item['streak'] as int? ?? 0,
         category: item['category'] as String? ?? 'General',
         habitType: item['habitType'] as String? ?? 'general',
+        frequencyType: item['frequencyType'] as String? ?? 'daily',
+        frequencyValue: item['frequencyValue'] as int? ?? 1,
+        customDays: (item['customDays'] as List<dynamic>?)
+            ?.map((value) => value as int)
+            .toList(),
+        windowStartMinutes: item['windowStartMinutes'] as int?,
+        windowEndMinutes: item['windowEndMinutes'] as int?,
+        evaluatedDates: (item['evaluatedDates'] as List<dynamic>?)
+            ?.map((value) => value.toString())
+            .toList(),
+        lastEvaluatedDate: _parseNullableDate(
+          item['lastEvaluatedDate'] as String?,
+        ),
       );
       await habitsBox.add(habit);
     }
